@@ -60,9 +60,7 @@ namespace NovelViewer
         readonly Panel header = new Panel(), nav = new Panel(), bottom = new Panel(), tabs = new Panel(), ghForm = new Panel();
         readonly Button btnList = new Button(), btnRefresh = new Button(), btnMarks = new Button(), btnSettings = new Button();
         readonly Button tabRecent = new Button(), tabPc = new Button(), tabGh = new Button();
-        readonly Button btnPrevCh = new Button(), btnNextCh = new Button();
-        readonly List<Panel> covers = new List<Panel>();
-        readonly Label title = new Label(), status = new Label(), progress = new Label(), where = new Label(), seekVal = new Label(), toast = new Label();
+        readonly Button btnPrevCh = new Button(), btnNextCh = new Button();        readonly Label title = new Label(), status = new Label(), progress = new Label(), where = new Label(), seekVal = new Label(), toast = new Label();
         readonly ListBox list = new ListBox();
         readonly ReaderView reader = new ReaderView();
         readonly SeekBar seek = new SeekBar();
@@ -264,17 +262,6 @@ namespace NovelViewer
             Controls.Add(headLine);
             Controls.Add(header);
             header.Tag = headLine;
-
-            // 메뉴를 숨길 때 위·왼쪽·아래 메뉴 자리를 덮는 판. 누르면 메뉴가 다시 보인다.
-            foreach (var p in new[] { header, nav, bottom })
-            {
-                var c = new Panel { Bounds = new Rectangle(Point.Empty, p.ClientSize), Visible = false,
-                    Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right };
-                c.Click += (s, e) => SetMenuHidden(false);
-                p.Controls.Add(c);
-                c.BringToFront();
-                covers.Add(c);
-            }
         }
 
         void SetupIconButton(Button b, string text, string tip)
@@ -381,12 +368,11 @@ namespace NovelViewer
             reader.TopMargin = St.TopMargin;
             if (reader.TextFont == null || Math.Abs(reader.TextFont.Size - St.FontSize * sc) > 0.1)
                 reader.TextFont = new Font("맑은 고딕", St.FontSize * sc, GraphicsUnit.Pixel);
-            // 메뉴를 숨겨도 자리는 그대로 두고 바탕색으로 덮기만 한다.
-            // 본문 칸 크기가 바뀌지 않으니 글이 위아래로 움직이지 않는다.
-            nav.Visible = St.Nav;
-            bottom.Visible = current != null;
-            ((Control)header.Tag).BackColor = menuHidden ? t.Bg : t.Line;
-            foreach (var c in covers) { c.BackColor = t.Bg; c.Visible = menuHidden; if (menuHidden) c.BringToFront(); }
+            // 메뉴를 숨기면 그만큼 본문이 넓어진다. 맨 윗줄은 그대로 두고 아래로 더 보여 준다(ReaderView.Relayout).
+            nav.Visible = St.Nav && !menuHidden;
+            header.Visible = !menuHidden;
+            ((Control)header.Tag).Visible = !menuHidden;
+            bottom.Visible = !menuHidden && current != null;
             foreach (var b in new[] { btnPrevCh, btnNextCh })
             {
                 b.BackColor = t.Bg; b.ForeColor = t.Fg;

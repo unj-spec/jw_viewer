@@ -26,7 +26,7 @@ namespace NovelViewer
         List<string> paras = new List<string>();
         readonly List<int> lineP = new List<int>();     // 각 줄이 속한 문단
         readonly List<string> lineT = new List<string>();
-        int lineH = 30, fontH = 18, top = 24, perPage = 1, page, scrollY, x0;
+        int lineH = 30, fontH = 18, top = 24, perPage = 1, first, scrollY, x0;   // first: 페이지 방식에서 화면 맨 윗줄 번호
         readonly VScrollBar bar = new VScrollBar();
 
         const TextFormatFlags Flags = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
@@ -54,7 +54,8 @@ namespace NovelViewer
         public void SetText(string text)
         {
             paras = text == null ? new List<string>() : text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').ToList();
-            page = 0; scrollY = 0;
+            first = 0; scrollY = 0;
+            layoutKey = null;
             Reflow();
         }
 
@@ -70,12 +71,25 @@ namespace NovelViewer
         int ViewW { get { return ClientSize.Width - (bar.Visible ? bar.Width : 0); } }
 
         // 크기·글꼴·방식이 바뀌면 줄을 다시 나눈다. 읽던 문단은 그대로 보여 준다.
+        // 높이만 바뀐 경우(메뉴 숨기기·보이기 등)는 줄을 다시 나누지 않고, 맨 윗줄을 그대로 둔 채 아래로 더 보여 준다.
         public void Relayout()
         {
+            string key = ViewW + "|" + (font == null ? 0 : font.Size) + "|" + LineHeightMul + "|" + SideMargin + "|" + TopMargin + "|" + PageMode;
+            if (key == layoutKey && lineT.Count > 0)
+            {
+                perPage = Math.Max(1, (ClientSize.Height - top * 2) / lineH);
+                first = Math.Max(0, Math.Min(first, lineT.Count - 1));
+                UpdateBar();
+                Invalidate(); Fire();
+                return;
+            }
             int keep = TopParagraph();
             Reflow();
+            layoutKey = key;
             ShowParagraph(keep);
         }
+
+        string layoutKey;
 
         void Reflow()
         {
@@ -144,13 +158,22 @@ namespace NovelViewer
         }
 
         // ---- 위치 ----
-        public int PageCount { get { return Math.Max(1, (lineT.Count + perPage - 1) / perPage); } }
-        public int PageIndex { get { return page; } }
+        // 맨 윗줄이 페이지 경계와 어긋날 수 있으므로(메뉴를 숨겨 화면이 길어졌을 때 등) 앞뒤 쪽수를 따로 센다.
+        int PagesBefore { get { return (first + perPage - 1) / perPage; } }
+        public int PageCount { get { return Math.Max(1, PagesBefore + (Math.Max(0, lineT.Count - first) + perPage - 1) / perPage); } }
+        public int PageIndex { get { return Math.Min(PagesBefore, PageCount - 1); } }
         public int ScrollPermille { get { return MaxScroll > 0 ? (int)((long)scrollY * 1000 / MaxScroll) : 1000; } }
 
         public void GoPage(int i)
         {
-            page = Math.Max(0, Math.Min(PageCount - 1, i));
+            i = Math.Max(0, Math.Min(PageCount - 1, i));
+            if (i == PageIndex) return;
+            SetFirst(i * perPage);
+        }
+
+        void SetFirst(int line)
+        {
+            first = Math.Max(0, Math.Min(Math.Max(0, lineT.Count - 1), line));
             Invalidate(); Fire();
         }
 
@@ -164,13 +187,13 @@ namespace NovelViewer
         public void SetScrollPermille(int v) { SetScroll((int)((long)MaxScroll * v / 1000)); }
 
         public void GoStart() { if (PageMode) GoPage(0); else SetScroll(0); }
-        public void GoEnd() { if (PageMode) GoPage(PageCount - 1); else SetScroll(MaxScroll); }
+        public void GoEnd() { if (PageMode) SetFirst(Math.Max(0, (lineT.Count - 1) / perPage * perPage)); else SetScroll(MaxScroll); }
 
         // 화면 맨 위에 보이는 문단 번호(읽던 곳 기억·책갈피에 쓴다)
         public int TopParagraph()
         {
             if (lineT.Count == 0) return 0;
-            int idx = PageMode ? page * perPage : (scrollY + lineH / 2) / lineH;
+            int idx = PageMode ? first :(scrollY + lineH / 2) / lineH;
             idx = Math.Max(0, Math.Min(lineT.Count - 1, idx));
             int p = lineP[idx];
             while (p < paras.Count - 1 && paras[p].Trim().Length == 0) p++;
@@ -181,7 +204,7 @@ namespace NovelViewer
         {
             int idx = lineP.FindIndex(x => x >= p);
             if (idx < 0) idx = Math.Max(0, lineT.Count - 1);
-            if (PageMode) GoPage(idx / perPage);
+            if (PageMode) SetFirst(idx);
             else SetScroll(idx * lineH);
         }
 
@@ -191,9 +214,9 @@ namespace NovelViewer
             if (!HasText) return;
             if (PageMode)
             {
-                if (dir > 0 && page >= PageCount - 1) { if (Edge != null) Edge(1); return; }
-                if (dir < 0 && page <= 0) { if (Edge != null) Edge(-1); return; }
-                GoPage(page + dir);
+                if (dir > 0 && first + perPage >= lineT.Count) { if (Edge != null) Edge(1); return; }
+                if (dir < 0 && first <= 0) { if (Edge != null) Edge(-1); return; }
+                SetFirst(first + dir * perPage);
             }
             else
             {
@@ -217,7 +240,6 @@ namespace NovelViewer
             int dy = (lineH - fontH) / 2;
             if (PageMode)
             {
-                int first = page * perPage;
                 for (int k = 0; k < perPage && first + k < lineT.Count; k++)
                     DrawLine(g, first + k, top + k * lineH + dy);
             }
