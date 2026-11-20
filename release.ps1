@@ -14,8 +14,8 @@ function Run($exe) {
 $ver = (Get-Content VERSION -Raw).Trim()
 $tag = "v$ver"
 if (git status --porcelain) { throw '커밋하지 않은 변경이 있습니다. 먼저 커밋하세요.' }
-gh release view $tag 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) { throw "$tag 릴리스가 이미 있습니다. VERSION 의 숫자를 올리세요." }
+$tags = @(gh release list --limit 200 --json tagName --jq '.[].tagName')
+if ($tags -contains $tag) { throw "$tag 릴리스가 이미 있습니다. VERSION 의 숫자를 올리세요." }
 
 Write-Host "== $tag 빌드 =="
 Run powershell -NoProfile -ExecutionPolicy Bypass -File pc\build.ps1
