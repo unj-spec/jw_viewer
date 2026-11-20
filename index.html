@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f0ede6">
+<title>소설 뷰어</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #222; --muted: #888; --panel: #f0ede6; --line: #ddd8cc; --accent: #3b6fd4;
+    --font-size: 18px; --line-height: 1.9; --width: 720px;
+    --sat: 0px;   /* 앱에서 상태바 높이 */
+    --sab: 0px;   /* 앱에서 아래 내비게이션 막대 높이 */
+    --hh: 56px;   /* 메뉴(헤더) 높이 */
+  }
+  /* 테마: 글자색·배경색 묶음. THEMES (스크립트) 와 이름을 맞춘다. */
+  [data-theme="sepia"]  { --bg: #f4ecd8; --fg: #4a3b28; --muted: #8b7a60; --panel: #e9dfc6; --line: #d6c9a8; --accent: #a0673a; }
+  [data-theme="green"]  { --bg: #e4edd3; --fg: #2d3a24; --muted: #6f7f60; --panel: #d6e2c1; --line: #bfcfa6; --accent: #4f7d3a; }
+  [data-theme="sky"]    { --bg: #e5edf5; --fg: #1f2c3a; --muted: #6a7b8c; --panel: #d6e2ee; --line: #bccbdb; --accent: #3a6ea8; }
+  [data-theme="pink"]   { --bg: #f8eaed; --fg: #48303a; --muted: #93737d; --panel: #eedbe0; --line: #dfc3cb; --accent: #b4546e; }
+  [data-theme="gray"]   { --bg: #dedede; --fg: #262626; --muted: #707070; --panel: #d0d0d0; --line: #bcbcbc; --accent: #4d4d4d; }
+  [data-theme="dusk"]   { --bg: #2b2520; --fg: #dccdb8; --muted: #8f8170; --panel: #362f28; --line: #4a4036; --accent: #d39b5c; }
+  [data-theme="dark"]   { --bg: #1b1c1f; --fg: #d6d6d6; --muted: #777; --panel: #26272b; --line: #3a3b40; --accent: #7aa2ff; }
+  [data-theme="navy"]   { --bg: #142036; --fg: #cbd5e6; --muted: #7a89a3; --panel: #1c2a44; --line: #2c3c5a; --accent: #7fa8ff; }
+  [data-theme="black"]  { --bg: #000; --fg: #b9b9b9; --muted: #6b6b6b; --panel: #121212; --line: #2a2a2a; --accent: #8fa8d8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+    font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  /* 보기 전용: 길게 눌러도 글자가 선택되지 않고, 밑줄도 없다. */
+  * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; text-decoration: none !important;
+    -webkit-tap-highlight-color: transparent; }
+
+  header { position: relative; z-index: 30; display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+    padding-top: calc(6px + var(--sat)); background: var(--panel); border-bottom: 1px solid var(--line); }
+  header .head { flex: 1; min-width: 0; }
+  header .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .status { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button, select { font: inherit; font-size: 15px; color: var(--fg); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button.icon { width: 42px; height: 42px; padding: 0; font-size: 20px; flex-shrink: 0; }
+  button:active { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .popup { position: absolute; top: 100%; right: 8px; z-index: 40; width: 310px; max-width: calc(100vw - 16px);
+    max-height: 75vh; overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .popup.hidden { display: none; }
+  .popup .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0;
+    border-bottom: 1px solid var(--line); font-size: 15px; }
+  .popup .row:last-child { border-bottom: 0; }
+  html:not(.in-app) .app-only { display: none !important; }
+  #fontVal { display: inline-block; min-width: 26px; text-align: center; }
+
+  .themes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 4px 0 10px; border-bottom: 1px solid var(--line); }
+  .themes button { height: 46px; padding: 0; border-radius: 10px; font-size: 13px; border: 2px solid transparent; }
+  .themes button.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--panel) inset; }
+
+  #btnAddMark { width: 100%; margin: 6px 0; background: var(--accent); color: #fff; border-color: var(--accent); }
+  .mark { cursor: pointer; }
+  .mark .txt { flex: 1; min-width: 0; font-size: 14px; }
+  .mark .txt b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: normal; }
+  .mark .txt small { color: var(--muted); font-size: 11px; }
+  .mark button { padding: 4px 8px; font-size: 13px; color: var(--muted); }
+  .popup .none { padding: 12px 0; color: var(--muted); font-size: 14px; text-align: center; }
+
+  main { position: relative; flex: 1; display: flex; min-height: 0; }
+
+  /* ---- 소설 열기 패널 ---- */
+  nav { width: 300px; border-right: 1px solid var(--line); background: var(--panel); flex-shrink: 0;
+    display: flex; flex-direction: column; }
+  nav.hidden { display: none; }
+  #backdrop { display: none; }
+  .tabs { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; padding: 9px 4px; font-size: 14px; }
+  #navBody { flex: 1; overflow: auto; }
+  .where { padding: 8px 14px; font-size: 12px; color: var(--muted); word-break: break-all; border-bottom: 1px solid var(--line); }
+  .item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .item .ico { font-size: 18px; width: 22px; text-align: center; flex-shrink: 0; }
+  .item .txt { flex: 1; min-width: 0; font-size: 14px; word-break: break-all; }
+  .item .txt small { display: block; font-size: 11px; color: var(--muted); }
+  .item.active { background: var(--bg); font-weight: 600; }
+  .item .x { padding: 2px 8px; font-size: 13px; color: var(--muted); }
+  .msg { padding: 18px 14px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .msg button { margin-top: 10px; }
+  .ghform { padding: 16px 14px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+  .ghform label { display: block; color: var(--fg); font-weight: 600; margin: 14px 0 6px; }
+  .ghform input { width: 100%; box-sizing: border-box; font-size: 15px; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--fg); -webkit-user-select: text; user-select: text; }
+  .ghform button { margin-top: 14px; width: 100%; padding: 11px; }
+  .ghform .go { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  #reader { position: relative; flex: 1; overflow: auto; }
+  html.page-mode #reader { overflow: hidden; touch-action: none; }
+  #text { max-width: var(--width); margin: 0 auto; padding: 24px 20px 50vh;
+    font-size: var(--font-size); line-height: var(--line-height); white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+  #text p { margin: 0; }
+  #text p:empty::before { content: '\200b'; }  /* 빈 줄도 한 줄 높이를 갖게 해서 페이지가 줄 단위로 맞는다 */
+  #placeholder { color: var(--muted); text-align: center; padding-top: 20vh; white-space: normal; line-height: 1.8; }
+
+  /* 페이지 모드: 위·아래 가장자리에 걸친 반쪽 줄을 가린다. */
+  .mask { position: fixed; left: 0; right: 0; z-index: 5; background: var(--bg); pointer-events: none; display: none; }
+  html.page-mode.has-file .mask { display: block; }
+  #maskTop { top: 0; }
+  #maskBottom { bottom: 0; }
+
+  /* 다음 화 / 이전 화로 넘어갈지 묻는 창 */
+  .dlg { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.45); padding: 24px; }
+  .dlg.hidden { display: none; }
+  .dlg .box { width: 100%; max-width: 380px; background: var(--panel); color: var(--fg); border-radius: 16px;
+    padding: 22px 20px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .dlg .q { font-size: 15px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+  .dlg .name { font-size: 18px; font-weight: 600; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+  .dlg .sub { font-size: 14px; color: var(--muted); margin-top: 6px; }
+  .dlg .btns { display: flex; gap: 10px; margin-top: 20px; }
+  .dlg .btns button { flex: 1; padding: 12px; font-size: 16px; }
+  .dlg .go { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .dlg .link { display: block; width: 100%; margin-top: 10px; padding: 8px; background: none; border: 0; color: var(--accent); font-size: 14px; }
+  .dlg .link.hidden { display: none; }
+
+  #toast { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 50; background: var(--accent); color: #fff;
+    padding: 8px 16px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; }
+
+  @media (max-width: 700px) {
+    nav { position: absolute; top: 0; bottom: 0; left: 0; z-index: 20; width: 86%; box-shadow: 0 0 20px rgba(0,0,0,.3); }
+    nav:not(.hidden) + #backdrop { display: block; position: absolute; inset: 0; z-index: 19; background: rgba(0,0,0,.35); }
+    #text { padding-left: 16px; padding-right: 16px; }
+  }
+
+  /* 휴대폰(앱·터치 화면): 읽는 동안 메뉴를 숨기고, 화면 가운데를 누르면 보인다. */
+  html.immersive header { position: fixed; top: 0; left: 0; right: 0; transform: translateY(-110%); }
+  html.immersive.menu-on header { transform: none; }
+  html.immersive nav { position: fixed; top: var(--hh); bottom: 0; left: 0; z-index: 20; width: 86%; max-width: 380px;
+    box-shadow: 0 0 20px rgba(0,0,0,.3); }
+  html.immersive nav:not(.hidden) + #backdrop { display: block; position: fixed; inset: 0; z-index: 19; background: rgba(0,0,0,.35); }
+  html.immersive:not(.menu-on) nav { display: none; }
+  /* 목록 맨 아래 항목이 폰의 내비게이션 막대(뒤로 가기 바)에 가리지 않게 */
+  html.immersive #navBody { padding-bottom: var(--sab); }
+
+  /* 페이지 이동 바: 끌어서 원하는 페이지로 바로 간다. 휴대폰에서는 메뉴를 띄웠을 때만 보인다. */
+  #seek { display: none; align-items: center; gap: 12px; padding: 8px 16px; background: var(--panel);
+    border-top: 1px solid var(--line); z-index: 30; }
+  html.has-file #seek { display: flex; }
+  html.immersive #seek { position: fixed; left: 0; right: 0; bottom: 0; padding-bottom: calc(8px + var(--sab)); }
+  html.immersive:not(.menu-on) #seek { display: none; }
+  html.immersive:has(#nav:not(.hidden)) #seek { display: none; }  /* 소설 목록을 연 동안 */
+  #seekRange { flex: 1; min-width: 0; height: 36px; margin: 0; accent-color: var(--accent); }
+  #seekVal { min-width: 84px; text-align: right; font-size: 14px; color: var(--muted); white-space: nowrap; }
+  /* 이전 장·다음 장 버튼. 좁은 화면(휴대폰)에서는 이동 바 아래 줄에 반반 놓는다. */
+  .chBtn { height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+    color: var(--fg); font-size: 14px; white-space: nowrap; cursor: pointer; }
+  .chBtn:active { background: var(--line); }
+  @media (max-width: 600px) {
+    #seek { flex-wrap: wrap; row-gap: 8px; }
+    #seekRange { order: 1; flex: 1 1 calc(100% - 100px); }
+    #seekVal { order: 2; min-width: 0; }
+    #chPrev { order: 3; flex: 1; }
+    #chNext { order: 4; flex: 1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <button id="btnList" class="icon" title="소설 열기 (L)">☰</button>
+  <div class="head">
+    <div class="title" id="title">소설 뷰어</div>
+    <div class="status" id="status"></div>
+  </div>
+  <span id="progress" class="status"></span>
+  <button id="btnRefresh" class="icon" title="새로고침 (R)">⟳</button>
+  <button id="btnMarks" class="icon" title="책갈피 (B)">🔖</button>
+  <button id="btnSettings" class="icon" title="보기 설정">가</button>
+  <div id="marks" class="popup hidden">
+    <button id="btnAddMark">＋ 지금 위치에 책갈피</button>
+    <div id="markList"></div>
+  </div>
+  <div id="settings" class="popup hidden">
+    <div class="row"><span>테마</span></div>
+    <div class="themes" id="themes"></div>
+    <div class="row"><span>넘기기 방식</span>
+      <select id="selMode">
+        <option value="page">페이지 (터치)</option><option value="scroll">스크롤 (위아래)</option>
+      </select></div>
+    <div class="row app-only"><span>볼륨 키로 넘기기</span><button id="btnVol">켜짐</button></div>
+    <div class="row"><span>자동 새로고침 (PC 2초 · GitHub 30초)</span><button id="btnAuto">켜짐</button></div>
+    <div class="row"><span>글자 크기</span>
+      <span><button id="btnSmaller">가−</button> <b id="fontVal"></b> <button id="btnBigger">가+</button></span></div>
+    <div class="row"><span>줄간격</span>
+      <select id="selLine">
+        <option value="1.5">1.5</option><option value="1.7">1.7</option><option value="1.9">1.9</option>
+        <option value="2.2">2.2</option><option value="2.5">2.5</option>
+      </select></div>
+    <div class="row"><span>본문 폭</span>
+      <select id="selWidth">
+        <option value="560px">좁게</option><option value="720px">보통</option><option value="960px">넓게</option><option value="100%">꽉 차게</option>
+      </select></div>
+    <div class="row app-only"><span>PC 주소</span><button id="btnServer">바꾸기</button></div>
+    <div class="row app-only"><span id="verText">앱 버전</span><button id="btnUpdate">업데이트 확인</button></div>
+  </div>
+</header>
+<main>
+  <nav id="nav">
+    <div class="tabs">
+      <button id="tabRecent">최근</button>
+      <button id="tabPc">📁 PC</button>
+      <button id="tabGh" class="app-only">☁ 깃허브</button>
+      <button id="tabPhone" class="app-only">📱 폰</button>
+    </div>
+    <div id="navBody"></div>
+  </nav>
+  <div id="backdrop"></div>
+  <div id="reader"><div id="text"></div></div>
+</main>
+<div id="seek"><button id="chPrev" class="chBtn">◀ 이전 장</button><input id="seekRange" type="range" min="0" max="0" value="0"><span id="seekVal"></span><button id="chNext" class="chBtn">다음 장 ▶</button></div>
+<div id="maskTop" class="mask"></div>
+<div id="maskBottom" class="mask"></div>
+<div id="chapter" class="dlg hidden">
+  <div class="box">
+    <div class="q" id="chQ"></div>
+    <div class="name" id="chName"></div>
+    <div class="btns"><button id="chNo">취소</button><button id="chGo" class="go">다음 화</button></div>
+  </div>
+</div>
+<div id="resume" class="dlg hidden">
+  <div class="box">
+    <div class="q" id="rsQ"></div>
+    <div class="name" id="rsName"></div>
+    <div class="sub" id="rsSub"></div>
+    <div class="btns"><button id="rsNo">목록 보기</button><button id="rsGo" class="go">이어 읽기</button></div>
+    <button id="rsServer" class="link hidden">다른 PC 주소로 연결</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const root = document.documentElement;
+// 안드로이드 앱 안에서 열리면 window.Android 가 있다. 그때는 앱 저장소를 쓴다.
+const app = window.Android;
+const store = {
+  get(k, d) {
+    try { const v = app ? app.get(k) : localStorage.getItem('nv.' + k); return v == null ? d : JSON.parse(v); } catch { return d; }
+  },
+  set(k, v) {
+    try { const s = JSON.stringify(v); if (app) app.set(k, s); else localStorage.setItem('nv.' + k, s); } catch {}
+  },
+};
+
+const THEMES = [
+  ['light', '밝게'], ['sepia', '종이'], ['green', '연두'], ['sky', '하늘'], ['pink', '분홍'],
+  ['gray', '회색'], ['dusk', '저녁'], ['dark', '어둡게'], ['navy', '남색'], ['black', '검정'],
+];
+
+const settings = Object.assign({ fontSize: 18, lineHeight: '1.9', width: '720px', theme: 'light', auto: true, mode: 'page', nav: true },
+  store.get('settings', {}));
+// 지금 연 소설. 'pc:<PC 경로>' 또는 'phone:<폰 파일 주소>'
+let current = store.get('current', null);
+if (current && !/^(pc|gh|phone):/.test(current)) current = null;
+let currentMtime = null;
+let navTab = store.get('navTab', 'recent');
+
+// 휴대폰에서는 읽는 동안 메뉴를 숨긴다(PC 브라우저는 항상 보임).
+const immersive = !!app || matchMedia('(pointer: coarse)').matches;
+root.classList.toggle('immersive', immersive);
+if (app) {
+  root.classList.add('in-app');
+  root.style.setProperty('--sat', app.statusBarHeight() + 'px');
+  if (app.navBarHeight) root.style.setProperty('--sab', app.navBarHeight() + 'px');
+}
+
+// ---- 메뉴 보이기/숨기기 ----
+function menuOn() { return !immersive || root.classList.contains('menu-on'); }
+
+function setMenu(show) {
+  if (!immersive) return;
+  if (!show && !current) show = true; // 연 소설이 없으면 메뉴는 늘 보인다
+  root.classList.toggle('menu-on', show);
+  if (!show) {
+    for (const p of document.querySelectorAll('.popup')) p.classList.add('hidden');
+    if (settings.nav) { settings.nav = false; applySettings(); }
+  }
+  if (app) app.setMenu(show);
+  root.style.setProperty('--hh', document.querySelector('header').offsetHeight + 'px');
+}
+
+// ---- 페이지 계산 ----
+// 페이지 모드에서는 화면에 들어가는 만큼의 "온전한 줄"만 보여 주고, 한 번에 한 페이지씩 넘긴다.
+const geo = { top: 24, step: 0, lineH: 0 };
+
+function layout() {
+  const reader = $('reader'), text = $('text');
+  const sat = parseFloat(getComputedStyle(root).getPropertyValue('--sat')) || 0;
+  geo.top = immersive ? sat + 14 : 24;
+  geo.lineH = parseFloat(getComputedStyle(text).lineHeight) || settings.fontSize * Number(settings.lineHeight);
+  const bottom = immersive ? 14 : 24;
+  const lines = Math.max(1, Math.floor((reader.clientHeight - geo.top - bottom) / geo.lineH));
+  geo.step = lines * geo.lineH;
+  text.style.paddingTop = geo.top + 'px';
+  text.style.paddingBottom = settings.mode === 'page' ? reader.clientHeight + 'px' : '50vh';
+  const r = reader.getBoundingClientRect();
+  $('maskTop').style.top = r.top + 'px';
+  $('maskTop').style.height = geo.top + 'px';
+  $('maskBottom').style.top = (r.top + geo.top + geo.step) + 'px';
+}
+
+function contentEnd() {
+  const ps = $('text').children;
+  return ps.length ? ps[ps.length - 1].offsetTop + ps[ps.length - 1].offsetHeight - geo.top : 0;
+}
+function pageCount() { return Math.max(1, Math.ceil(contentEnd() / geo.step)); }
+function pageIndex() { return Math.round($('reader').scrollTop / geo.step); }
+
+function goPage(i) {
+  i = Math.max(0, Math.min(pageCount() - 1, i));
+  $('reader').scrollTop = i * geo.step;
+  updateProgress();
+}
+
+// 앱의 볼륨 키에서도 부른다. 애니메이션 없이 바로 넘긴다.
+// 끝에서 더 넘기면 같은 폴더의 다음 화(처음에서 더 넘기면 이전 화)로 갈지 묻는다.
+function turnPage(dir) {
+  if (!current) return;
+  if (chapterAsk) { if (dir === chapterAsk.dir) goChapter(); else closeChapter(); return; }
+  const r = $('reader');
+  if (settings.mode === 'page') {
+    const i = pageIndex();
+    if (dir > 0 && i >= pageCount() - 1) return askChapter(1);
+    if (dir < 0 && i <= 0) return askChapter(-1);
+    goPage(i + dir);
+  } else {
+    if (dir > 0 && r.scrollTop >= r.scrollHeight - r.clientHeight - 2) return askChapter(1);
+    if (dir < 0 && r.scrollTop <= 0) return askChapter(-1);
+    r.scrollTop += dir * (r.clientHeight - geo.lineH);
+  }
+}
+
+// ---- 다음 화 / 이전 화 ----
+// 지금 연 PC·GitHub 파일과 같은 폴더의 txt 목록(파일 이름의 번호 순)
+let chapters = [];
+let chapterAsk = null;
+
+async function loadChapters(id) {
+  chapters = [];
+  const src = srcOf(id);
+  if (src === 'phone') return;
+  const m = id.slice(3).match(/^(.*)[\\/]/);
+  try {
+    const res = await fetch(API[src] + '/browse?dir=' + encodeURIComponent(m ? m[1] : ''));
+    if (!res.ok || current !== id) return;
+    chapters = (await res.json()).entries.filter((e) => e.type === 'file').map((e) => ({ ...e, id: src + ':' + e.path }));
+  } catch {}
+}
+
+function askChapter(dir) {
+  const i = chapters.findIndex((c) => c.id === current);
+  const target = i < 0 ? null : chapters[i + dir];
+  if (!target) {
+    toast(dir > 0 ? (i < 0 ? '마지막 페이지입니다' : '이 폴더의 마지막 화입니다') : '첫 페이지입니다');
+    return;
+  }
+  chapterAsk = { dir, id: target.id };
+  $('chQ').textContent = dir > 0 ? '이 화를 다 읽었습니다. 다음 화로 넘어갈까요?' : '이전 화로 돌아갈까요?';
+  $('chName').textContent = stripExt(target.name).replace(/_/g, ' ');
+  $('chGo').textContent = dir > 0 ? '다음 화' : '이전 화';
+  $('chapter').classList.remove('hidden');
+}
+
+function closeChapter() { chapterAsk = null; $('chapter').classList.add('hidden'); }
+
+// 이전 장·다음 장 버튼: 묻지 않고 바로 연다(둘 다 첫 페이지부터).
+async function moveChapter(dir) {
+  const i = chapters.findIndex((c) => c.id === current);
+  const target = i < 0 ? null : chapters[i + dir];
+  if (!target) {
+    toast(i < 0 ? '앞뒤 장을 찾지 못했습니다' : dir > 0 ? '이 폴더의 마지막 장입니다' : '이 폴더의 첫 장입니다');
+    return;
+  }
+  saveScroll();
+  await openFile(target.id, true, 'start');
+}
+
+async function goChapter() {
+  const ask = chapterAsk;
+  closeChapter();
+  if (!ask) return;
+  saveScroll();
+  // 다음 화는 첫 페이지부터, 이전 화는 마지막 페이지부터 보여준다.
+  if (await openFile(ask.id, true, ask.dir > 0 ? 'start' : 'end')) setMenu(false);
+}
+
+// 화면 맨 위에 보이는 문단 번호 (책갈피·글자 크기 변경 시 위치 유지에 쓴다).
+function topParagraph() {
+  const top = $('reader').scrollTop + geo.top;
+  const ps = $('text').children;
+  if (!current || !ps.length) return 0;
+  let lo = 0, hi = ps.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (ps[mid].offsetTop <= top + 4) lo = mid; else hi = mid - 1;
+  }
+  while (lo < ps.length - 1 && !ps[lo].textContent.trim()) lo++;
+  return lo;
+}
+
+function showParagraph(i) {
+  const p = $('text').children[Math.min(i, $('text').children.length - 1)];
+  if (!p) return;
+  const y = p.offsetTop - geo.top;
+  if (settings.mode === 'page') goPage(Math.floor((y + 1) / geo.step));
+  else $('reader').scrollTop = y;
+}
+
+// 글자 크기·줄간격·넘기기 방식·화면 크기가 바뀌어도 읽던 문단을 지킨다.
+function relayout() {
+  const keep = topParagraph();
+  layout();
+  if (current) showParagraph(keep);
+  updateProgress();
+}
+
+function updateProgress() {
+  const r = $('reader'), s = $('seekRange');
+  if (!current) { $('progress').textContent = ''; return; }
+  if (settings.mode === 'page') {
+    $('progress').textContent = (pageIndex() + 1) + ' / ' + pageCount();
+    s.max = pageCount() - 1;
+    s.value = pageIndex();
+  } else {
+    const max = r.scrollHeight - r.clientHeight;
+    $('progress').textContent = (max > 0 ? Math.min(100, Math.round(r.scrollTop / max * 100)) : 100) + '%';
+    s.max = 1000;
+    s.value = max > 0 ? Math.round(r.scrollTop / max * 1000) : 1000;
+  }
+  $('seekVal').textContent = settings.mode === 'page' ? $('progress').textContent + ' 쪽' : $('progress').textContent;
+}
+
+// 페이지 이동 바를 끄는 동안 바로바로 그 페이지를 보여준다.
+$('seekRange').addEventListener('input', () => {
+  const v = Number($('seekRange').value), r = $('reader');
+  if (settings.mode === 'page') goPage(v);
+  else r.scrollTop = (r.scrollHeight - r.clientHeight) * v / 1000;
+});
+
+// ---- 설정 ----
+function applySettings() {
+  root.style.setProperty('--font-size', settings.fontSize + 'px');
+  root.style.setProperty('--line-height', settings.lineHeight);
+  root.style.setProperty('--width', settings.width);
+  root.dataset.theme = settings.theme;
+  root.classList.toggle('page-mode', settings.mode === 'page');
+  $('selMode').value = settings.mode;
+  $('selLine').value = settings.lineHeight;
+  $('selWidth').value = settings.width;
+  for (const b of $('themes').children) b.classList.toggle('sel', b.dataset.theme === settings.theme);
+  $('btnAuto').classList.toggle('on', settings.auto);
+  $('btnAuto').textContent = settings.auto ? '켜짐' : '꺼짐';
+  $('fontVal').textContent = settings.fontSize;
+  document.querySelector('meta[name=theme-color]').content = getComputedStyle(root).getPropertyValue('--panel').trim();
+  $('nav').classList.toggle('hidden', !settings.nav);
+  store.set('settings', settings);
+}
+
+function changeSetting(fn) { fn(); applySettings(); relayout(); }
+
+// 테마 고르기: 각 버튼을 그 테마 색으로 칠해 미리 보여준다.
+for (const [id, label] of THEMES) {
+  const b = document.createElement('button');
+  b.dataset.theme = id;
+  b.textContent = label;
+  const probe = document.createElement('div');
+  probe.dataset.theme = id;
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  b.style.background = cs.getPropertyValue('--bg');
+  b.style.color = cs.getPropertyValue('--fg');
+  probe.remove();
+  b.onclick = () => { settings.theme = id; applySettings(); };
+  $('themes').appendChild(b);
+}
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function fmtTime(ms) {
+  const d = new Date(ms);
+  return d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' ' +
+         d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+}
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const stripExt = (n) => n.replace(/\.(txt|md|text)$/i, '');
+
+// ---- 파일 읽기 ----
+// 폰 파일 글자 인코딩: UTF-8(BOM 포함), UTF-16, 그 외에는 CP949(EUC-KR)
+function decodeBytes(b) {
+  if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return new TextDecoder('utf-8').decode(b.subarray(3));
+  if (b[0] === 0xff && b[1] === 0xfe) return new TextDecoder('utf-16le').decode(b.subarray(2));
+  if (b[0] === 0xfe && b[1] === 0xff) return new TextDecoder('utf-16be').decode(b.subarray(2));
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { return new TextDecoder('euc-kr').decode(b); }
+}
+
+// 소설이 있는 곳: id 앞부분으로 구분한다. pc:경로, gh:저장소 안 경로, phone:파일 주소
+const API = { pc: '/api', gh: '/gh' };
+const SRC_NAME = { pc: 'PC', gh: 'GitHub', phone: '폰' };
+const srcOf = (id) => id.startsWith('phone:') ? 'phone' : id.startsWith('gh:') ? 'gh' : 'pc';
+const ghRepo = () => (app && app.getGithub ? app.getGithub() : '');
+
+async function readSource(id) {
+  if (id.startsWith('phone:')) {
+    const b64 = app && app.readFile(id.slice(6));
+    if (b64 == null) return null;
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return { text: decodeBytes(bytes), mtime: null, name: recentName(id) };
+  }
+  try {
+    const res = await fetch(API[srcOf(id)] + '/file?path=' + encodeURIComponent(id.slice(3)));
+    return res.ok ? await res.json() : null;
+  } catch { return null; }
+}
+
+// ---- 최근 읽은 소설 ----
+function recent() { return store.get('recent', []); }
+function recentName(id) { const r = recent().find((x) => x.id === id); return r ? r.name : id.split(/[\\/]/).pop(); }
+function addRecent(id, name) {
+  const list = recent().filter((x) => x.id !== id);
+  list.unshift({ id, name, time: Date.now() });
+  store.set('recent', list.slice(0, 30));
+}
+
+// ---- 소설 열기 패널 ----
+function setTab(tab) {
+  navTab = tab;
+  store.set('navTab', tab);
+  $('tabRecent').classList.toggle('on', tab === 'recent');
+  $('tabPc').classList.toggle('on', tab === 'pc');
+  $('tabGh').classList.toggle('on', tab === 'gh');
+  if (tab === 'pc') browse('pc', store.get('pcDir', ''));
+  else if (tab === 'gh') ghRepo() ? browse('gh', store.get('ghDir', '')) : ghForm();
+  else renderRecent();
+}
+
+function item(ico, title, sub, onclick, extra) {
+  const d = document.createElement('div');
+  d.className = 'item';
+  d.innerHTML = '<span class="ico">' + ico + '</span><span class="txt">' + esc(title) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>';
+  d.onclick = onclick;
+  if (extra) d.appendChild(extra);
+  return d;
+}
+
+function renderRecent() {
+  const body = $('navBody');
+  body.innerHTML = '';
+  const list = recent();
+  if (!list.length) {
+    body.innerHTML = '<div class="msg">아직 연 소설이 없습니다.<br><b>📁 PC</b> 에서 PC의 소설을 고르거나' +
+      (app ? ', <b>📱 폰</b> 에서 폰에 저장된 txt 파일을 고르세요.' : ' 고르세요.') + '</div>';
+    return;
+  }
+  for (const r of list) {
+    const x = document.createElement('button');
+    x.className = 'x';
+    x.textContent = '✕';
+    x.title = '목록에서 지우기';
+    x.onclick = (e) => { e.stopPropagation(); store.set('recent', recent().filter((y) => y.id !== r.id)); renderRecent(); };
+    const src = srcOf(r.id);
+    const d = item({ phone: '📱', pc: '💻', gh: '☁' }[src], stripExt(r.name), SRC_NAME[src] + ' · ' + fmtTime(r.time), () => pick(r.id), x);
+    if (r.id === current) d.classList.add('active');
+    body.appendChild(d);
+  }
+}
+
+// PC 폴더나 GitHub 저장소를 둘러본다(src: 'pc' 또는 'gh'). 둘 다 같은 모양의 목록을 돌려준다.
+async function browse(src, dir) {
+  const body = $('navBody');
+  const dirKey = src + 'Dir';
+  body.innerHTML = '<div class="msg">불러오는 중…</div>';
+  let data;
+  try {
+    const res = await fetch(API[src] + '/browse?dir=' + encodeURIComponent(dir));
+    if (!res.ok && dir && res.status !== 401) { store.set(dirKey, ''); return browse(src, ''); }
+    if (!res.ok && src === 'gh') throw new Error(await res.text());
+    data = await res.json();
+  } catch (err) {
+    if (navTab !== src) return;
+    const b = document.createElement('button');
+    if (src === 'gh') {
+      body.innerHTML = '<div class="msg"></div>';
+      body.firstChild.textContent = (err && err.message) || 'GitHub에 연결할 수 없습니다.';
+      b.textContent = 'GitHub 설정 바꾸기';
+      b.onclick = ghForm;
+    } else {
+      body.innerHTML = '<div class="msg">PC에 연결할 수 없습니다.<br>PC에서 <b>start.bat</b> 이 켜져 있는지, 폰과 PC가 같은 와이파이인지 확인하세요.</div>';
+      if (!app) return;
+      b.textContent = 'PC 주소 바꾸기';
+      b.onclick = () => app.openSetup();
+    }
+    body.firstChild.appendChild(document.createElement('br'));
+    body.firstChild.appendChild(b);
+    return;
+  }
+  if (navTab !== src) return;
+  store.set(dirKey, data.dir);
+  body.innerHTML = '';
+  const where = document.createElement('div');
+  where.className = 'where';
+  // GitHub 은 설정한 폴더(예: abi) 아래 경로만 보여준다: "GitHub · unj-spec/nov/abi / 9부"
+  const ghRoot = ghRepo().split('/').slice(2).join('/');
+  const ghSub = ghRoot && data.dir.startsWith(ghRoot + '/') ? data.dir.slice(ghRoot.length + 1) : data.dir;
+  where.textContent = src === 'gh' ? 'GitHub · ' + ghRepo() + (ghSub ? ' / ' + ghSub : '')
+    : data.dir || 'PC의 공유 폴더 (PC에서 폴더추가.bat 으로 추가)';
+  body.appendChild(where);
+  if (src === 'gh' && !data.dir) body.appendChild(item('⚙', 'GitHub 설정 바꾸기', '', ghForm));
+  if (data.parent !== null) body.appendChild(item('⬆', '상위 폴더', '', () => browse(src, data.parent)));
+  for (const e of data.entries) {
+    if (e.type === 'dir') body.appendChild(item('📁', e.name, '', () => browse(src, e.path)));
+    else {
+      const id = src + ':' + e.path;
+      const sub = (e.mtime ? fmtTime(e.mtime) + ' · ' : '') + (e.size / 1024).toFixed(1) + 'KB';
+      const d = item('📄', stripExt(e.name), sub, () => pick(id));
+      if (id === current) d.classList.add('active');
+      body.appendChild(d);
+    }
+  }
+  if (!data.entries.length) body.insertAdjacentHTML('beforeend', '<div class="msg">이 폴더에는 txt 파일이 없습니다.</div>');
+}
+
+// GitHub 저장소와 토큰을 넣는 칸. 토큰은 앱 안에만 저장된다.
+function ghForm() {
+  const body = $('navBody');
+  const repo = ghRepo();
+  body.innerHTML = '<div class="ghform">비공개 저장소의 소설을 읽으려면 GitHub <b>토큰</b>이 필요합니다.<br>' +
+    'GitHub → Settings → Developer settings → Fine-grained tokens 에서 만들고, 이 저장소만 고른 뒤 <b>Contents: Read-only</b> 권한만 주세요.' +
+    '<label for="ghRepoIn">저장소 주소</label><input id="ghRepoIn" autocomplete="off" placeholder="예: https://github.com/아이디/저장소/tree/main/폴더">' +
+    '<label for="ghTokenIn">토큰</label><input id="ghTokenIn" type="password" autocomplete="off" placeholder="' +
+    (repo ? '바꿀 때만 입력' : 'github_pat_…') + '">' +
+    '<button id="ghSave" class="go">저장하고 열기</button>' + (repo ? '<button id="ghClear">GitHub 연결 지우기</button>' : '') + '</div>';
+  $('ghRepoIn').value = store.get('ghRepoName', '') || repo;
+  $('ghSave').onclick = () => {
+    const r = $('ghRepoIn').value.trim(), t = $('ghTokenIn').value.trim();
+    if (!r || (!repo && !t)) { toast('저장소와 토큰을 넣어 주세요'); return; }
+    app.setGithub(r, t);
+    store.set('ghRepoName', r);
+    store.set('ghDir', '');
+    browse('gh', '');
+  };
+  if (repo) $('ghClear').onclick = () => { app.clearGithub(); toast('GitHub 연결을 지웠습니다'); ghForm(); };
+}
+
+// 목록에서 소설을 골랐을 때
+async function pick(id) {
+  saveScroll();
+  if (await openFile(id, true)) {
+    if (innerWidth <= 700 || immersive) { settings.nav = false; applySettings(); }
+    setMenu(false);
+  }
+}
+
+// 앱의 파일 선택 창에서 폰 파일을 골랐을 때 앱이 부른다.
+function onPhoneFile(uri, name) { addRecent('phone:' + uri, name); pick('phone:' + uri); }
+
+// 읽던 위치는 문단 번호로 저장한다.
+function saveScroll() {
+  if (!current) return;
+  const pos = store.get('pos', {});
+  pos[current] = topParagraph();
+  store.set('pos', pos);
+}
+
+// remember: true 면 마지막으로 본 파일 기억은 지우지 않는다(시작할 때, PC가 꺼져 있을 때).
+function showEmpty(remember) {
+  current = null;
+  if (!remember) store.set('current', null);
+  root.classList.remove('has-file');
+  $('text').innerHTML = '<div id="placeholder">☰ 를 눌러 소설을 여세요.<br>PC의 소설' + (app ? ', 폰에 저장된 txt 파일' : '') + '을 열 수 있습니다.</div>';
+  $('title').textContent = '소설 뷰어';
+  $('status').textContent = '';
+  updateProgress();
+}
+
+// at: 'start' = 첫 페이지부터, 'end' = 마지막 페이지부터, 없으면 읽던 곳부터
+async function openFile(id, fresh, at) {
+  const data = await readSource(id);
+  if (!data) {
+    toast(SRC_NAME[srcOf(id)] + ' 파일을 열 수 없습니다');
+    if (fresh && id === current) showEmpty();
+    return false;
+  }
+  const keep = fresh ? (store.get('pos', {})[id] || 0) : topParagraph();
+  const frag = document.createDocumentFragment();
+  for (const l of data.text.replace(/\r\n?/g, '\n').split('\n')) {
+    const p = document.createElement('p');
+    p.textContent = l;
+    frag.appendChild(p);
+  }
+  $('text').replaceChildren(frag);
+
+  const name = data.name || recentName(id);
+  if (fresh) addRecent(id, name);
+  current = id;
+  currentMtime = data.mtime;
+  root.classList.add('has-file');
+  store.set('current', id);
+  layout();
+  if (at === 'start') $('reader').scrollTop = 0;
+  else if (at === 'end') {
+    if (settings.mode === 'page') goPage(pageCount() - 1);
+    else $('reader').scrollTop = $('reader').scrollHeight;
+  } else showParagraph(keep);
+  if (fresh) loadChapters(id);
+  $('title').textContent = stripExt(name);
+  document.title = stripExt(name) + ' - 소설 뷰어';
+  $('status').textContent = { phone: '폰에 저장된 파일', gh: 'GitHub · 마지막 push 내용', pc: 'PC · ' + fmtTime(data.mtime) + ' 저장본' }[srcOf(id)];
+  updateProgress();
+  return true;
+}
+
+function refresh() {
+  if (current) openFile(current, false).then((ok) => ok && toast('새로고침'));
+  if (settings.nav) setTab(navTab);
+}
+
+// 자동 새로고침: PC 파일은 2초마다 저장 시각을, GitHub 파일은 30초마다 내용(sha)을 확인하고, 바뀌었으면 다시 읽는다.
+let ghChecked = 0;
+setInterval(async () => {
+  if (!settings.auto || !current || document.hidden) return;
+  const src = srcOf(current);
+  if (src === 'phone') return;
+  if (src === 'gh') { if (Date.now() - ghChecked < 30000) return; ghChecked = Date.now(); }
+  try {
+    const res = await fetch(API[src] + '/stat?path=' + encodeURIComponent(current.slice(3)));
+    if (!res.ok) return;
+    const { mtime } = await res.json();
+    if (currentMtime && mtime !== currentMtime) openFile(current, false);
+  } catch {}
+}, 2000);
+
+// ---- 책갈피 ----
+// 문단 번호로 저장하므로 글자 크기·줄간격을 바꿔도 같은 곳으로 간다.
+function allMarks() { return store.get('marks', {}); }
+
+function addMark() {
+  if (!current) return;
+  const i = topParagraph();
+  const marks = allMarks();
+  const list = marks[current] || [];
+  if (!list.some((m) => m.p === i)) {
+    list.push({ p: i, text: $('text').children[i].textContent.trim().slice(0, 60), time: Date.now(), pct: $('progress').textContent });
+    list.sort((a, b) => a.p - b.p);
+    marks[current] = list;
+    store.set('marks', marks);
+  }
+  renderMarks();
+  toast('책갈피를 추가했습니다');
+}
+
+function renderMarks() {
+  const box = $('markList');
+  box.innerHTML = '';
+  const list = (current && allMarks()[current]) || [];
+  $('btnAddMark').disabled = !current;
+  if (!list.length) {
+    box.innerHTML = '<div class="none">' + (current ? '책갈피가 없습니다.' : '먼저 소설을 여세요.') + '</div>';
+    return;
+  }
+  list.forEach((m, idx) => {
+    const row = document.createElement('div');
+    row.className = 'row mark';
+    row.innerHTML = '<div class="txt"><b></b><small></small></div><button title="삭제">삭제</button>';
+    row.querySelector('b').textContent = m.text || '(빈 줄)';
+    row.querySelector('small').textContent = (m.pct ? m.pct + ' · ' : '') + fmtTime(m.time);
+    row.onclick = () => { showParagraph(m.p); setMenu(false); };
+    row.querySelector('button').onclick = (e) => {
+      e.stopPropagation();
+      const marks = allMarks();
+      marks[current].splice(idx, 1);
+      if (!marks[current].length) delete marks[current];
+      store.set('marks', marks);
+      renderMarks();
+    };
+    box.appendChild(row);
+  });
+}
+
+// ---- 버튼 ----
+$('btnList').onclick = () => { settings.nav = !settings.nav; applySettings(); if (settings.nav) setTab(navTab); };
+$('backdrop').onclick = () => { settings.nav = false; applySettings(); };
+$('tabRecent').onclick = () => setTab('recent');
+$('tabPc').onclick = () => setTab('pc');
+$('tabGh').onclick = () => setTab('gh');
+$('tabPhone').onclick = () => app && app.pickFile();
+function togglePopup(id) {
+  for (const p of document.querySelectorAll('.popup')) if (p.id !== id) p.classList.add('hidden');
+  $(id).classList.toggle('hidden');
+}
+$('btnSettings').onclick = () => togglePopup('settings');
+$('btnMarks').onclick = () => { renderMarks(); togglePopup('marks'); };
+$('btnAddMark').onclick = addMark;
+$('btnRefresh').onclick = refresh;
+$('chGo').onclick = goChapter;
+$('chPrev').onclick = () => moveChapter(-1);
+$('chNext').onclick = () => moveChapter(1);
+$('chNo').onclick = closeChapter;
+$('chapter').onclick = (e) => { if (e.target.id === 'chapter') closeChapter(); };
+$('btnAuto').onclick = () => { settings.auto = !settings.auto; applySettings(); toast(settings.auto ? '자동 새로고침 켬' : '자동 새로고침 끔'); };
+$('btnSmaller').onclick = () => changeSetting(() => { settings.fontSize = Math.max(12, settings.fontSize - 1); });
+$('btnBigger').onclick = () => changeSetting(() => { settings.fontSize = Math.min(40, settings.fontSize + 1); });
+$('selMode').onchange = (e) => changeSetting(() => { settings.mode = e.target.value; });
+$('selLine').onchange = (e) => changeSetting(() => { settings.lineHeight = e.target.value; });
+$('selWidth').onchange = (e) => changeSetting(() => { settings.width = e.target.value; });
+if (app) {
+  const showVol = () => {
+    const on = app.getVolumeKeys();
+    $('btnVol').classList.toggle('on', on);
+    $('btnVol').textContent = on ? '켜짐' : '꺼짐';
+  };
+  showVol();
+  $('btnVol').onclick = () => { app.setVolumeKeys(!app.getVolumeKeys()); showVol(); };
+  $('btnServer').onclick = () => app.openSetup();
+  if (app.appVersion) {
+    $('verText').textContent = '앱 버전 ' + app.appVersion();
+    $('btnUpdate').onclick = () => { toast('새 버전을 확인합니다'); app.checkUpdate(true); };
+  }
+}
+
+// 팝업이 열려 있을 때 바깥을 누르면 팝업만 닫는다.
+document.addEventListener('click', (e) => {
+  const open = document.querySelector('.popup:not(.hidden)');
+  if (!open || open.contains(e.target) || e.target.closest('#btnSettings, #btnMarks')) return;
+  open.classList.add('hidden');
+  if ($('reader').contains(e.target)) e.stopPropagation();
+}, true);
+
+// 안드로이드 뒤로 가기: 닫을 것이 있으면 닫고 true, 없으면 false(앱 종료).
+function appBack() {
+  if (chapterAsk) { closeChapter(); return true; }
+  if (resumeId) { closeResume(); showList(); return true; }
+  const open = document.querySelector('.popup:not(.hidden)');
+  if (open) { open.classList.add('hidden'); return true; }
+  if (settings.nav && (navTab === 'pc' || navTab === 'gh') && store.get(navTab + 'Dir', '')) {
+    const up = document.querySelector('#navBody .item');
+    if (up && up.textContent.includes('상위 폴더')) { up.click(); return true; }
+  }
+  if (settings.nav && current) { settings.nav = false; applySettings(); return true; }
+  // 닫을 것이 없으면 2초 안에 한 번 더 눌러야 종료한다(실수로 꺼지지 않게).
+  if (Date.now() - (appBack.last || 0) < 2000) return false;
+  appBack.last = Date.now();
+  toast('뒤로 버튼을 한 번 더 누르면 종료됩니다');
+  return true;
+}
+
+// ---- 본문 터치 ----
+// 위쪽 1/3 = 이전 페이지, 가운데 = 메뉴, 아래쪽 1/3 = 다음 페이지 (스크롤 방식에서는 가운데만 동작).
+let swiped = false;
+$('reader').addEventListener('click', (e) => {
+  if (swiped) { swiped = false; return; }
+  if (!current) { if (!settings.nav) $('btnList').click(); return; }
+  if (immersive && menuOn()) { setMenu(false); return; }
+  const h = innerHeight, y = e.clientY;
+  const zone = y < h / 3 ? -1 : y > h * 2 / 3 ? 1 : 0;
+  if (zone === 0) setMenu(true);
+  else if (settings.mode === 'page') turnPage(zone);
+});
+
+// 페이지 방식에서는 밀어서도 넘긴다: 위·왼쪽으로 밀면 다음, 아래·오른쪽으로 밀면 이전.
+let touch = null;
+$('reader').addEventListener('touchstart', (e) => { touch = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
+$('reader').addEventListener('touchend', (e) => {
+  if (!touch || settings.mode !== 'page' || !current) return;
+  const dx = e.changedTouches[0].clientX - touch.x, dy = e.changedTouches[0].clientY - touch.y;
+  touch = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 50) return;
+  swiped = true;
+  setTimeout(() => { swiped = false; }, 400);
+  if (immersive && menuOn()) { setMenu(false); return; }
+  turnPage((Math.abs(dy) > Math.abs(dx) ? dy : dx) < 0 ? 1 : -1);
+});
+
+$('reader').addEventListener('scroll', () => { updateProgress(); clearTimeout(saveScroll.t); saveScroll.t = setTimeout(saveScroll, 300); });
+addEventListener('beforeunload', saveScroll);
+addEventListener('resize', () => { clearTimeout(relayout.t); relayout.t = setTimeout(relayout, 150); });
+addEventListener('keydown', (e) => {
+  // 입력 칸에 글자를 칠 때는 단축키(r = 새로고침 등)가 끼어들지 않게 한다.
+  if (/^(SELECT|INPUT|TEXTAREA)$/.test(e.target.tagName) || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === 'r' || e.key === 'R') refresh();
+  else if (e.key === 'PageDown' || e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); turnPage(1); }
+  else if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); turnPage(-1); }
+  else if (e.key === 'l' || e.key === 'L') $('btnList').click();
+  else if (e.key === 'b' || e.key === 'B') addMark();
+  else if (e.key === '+' || e.key === '=') $('btnBigger').click();
+  else if (e.key === '-') $('btnSmaller').click();
+});
+
+// ---- 시작 ----
+// 마지막으로 읽던 소설이 있으면 이어 읽을지 묻는다. PC 소설이면 마지막 PC에 연결할지도 함께 묻는다.
+let resumeId = null;
+
+function showList() {
+  settings.nav = true; applySettings(); setTab(navTab); setMenu(true);
+}
+
+function askResume(id, failed) {
+  resumeId = id;
+  const src = srcOf(id), pc = src === 'pc';
+  const server = app ? app.getServer() : location.host;
+  $('rsQ').textContent = failed
+    ? { pc: '열 수 없습니다. PC에서 start.bat 이 켜져 있는지, 파일이 그대로 있는지 확인하세요.',
+        gh: '열 수 없습니다. 인터넷 연결과 GitHub 설정(☰ → ☁ 깃허브)을 확인하세요.', phone: '파일을 열 수 없습니다.' }[src]
+    : { pc: '마지막으로 접속한 PC에 연결해서 이어 읽을까요?', gh: 'GitHub에서 이어 읽을까요?', phone: '마지막으로 읽던 소설을 이어 읽을까요?' }[src];
+  $('rsName').textContent = stripExt(recentName(id)).replace(/_/g, ' ');
+  $('rsSub').textContent = { pc: 'PC ' + (server || '주소 없음'), gh: 'GitHub ' + (ghRepo() || '설정 없음'), phone: '폰에 저장된 파일' }[src] + ' · 읽던 페이지부터';
+  $('rsGo').textContent = failed ? '다시 시도' : '이어 읽기';
+  $('rsServer').classList.toggle('hidden', !(pc && app));
+  $('resume').classList.remove('hidden');
+}
+
+function closeResume() { resumeId = null; $('resume').classList.add('hidden'); }
+
+async function goResume() {
+  const id = resumeId;
+  if (!id) return;
+  $('rsGo').disabled = true;
+  $('rsQ').textContent = { pc: 'PC에 연결하는 중…', gh: 'GitHub에서 받는 중…', phone: '여는 중…' }[srcOf(id)];
+  const ok = await openFile(id, true);
+  $('rsGo').disabled = false;
+  if (ok) { closeResume(); setMenu(false); }
+  else askResume(id, true);
+}
+
+$('rsGo').onclick = goResume;
+$('rsNo').onclick = () => { closeResume(); showList(); };
+$('rsServer').onclick = () => app.openSetup();
+
+(() => {
+  const last = current;
+  showEmpty(true);
+  settings.nav = false;
+  applySettings();
+  layout();
+  setTab(navTab);
+  if (last) { setMenu(false); askResume(last); }
+  else showList();
+})();
+</script>
+</body>
+</html>

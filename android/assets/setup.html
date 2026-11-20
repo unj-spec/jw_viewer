@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소설 뷰어</title>
+<style>
+  body { margin: 0; background: #fbfaf7; color: #222; font-family: system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; }
+  .wrap { max-width: 420px; margin: 0 auto; padding: 48px 24px; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  p { color: #666; line-height: 1.6; font-size: 15px; margin: 0 0 20px; }
+  .err { background: #fde8e6; color: #a33a2c; border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.6; display: none; }
+  label { display: block; font-weight: 600; margin: 24px 0 8px; }
+  input { width: 100%; box-sizing: border-box; font-size: 18px; padding: 12px 14px; border: 1px solid #ccc;
+    border-radius: 10px; background: #fff; -webkit-user-select: text; user-select: text; }
+  button { width: 100%; margin-top: 16px; font-size: 17px; padding: 14px; border: 0; border-radius: 10px;
+    background: #3b6fd4; color: #fff; }
+  button.sub { background: transparent; color: #3b6fd4; border: 1px solid #3b6fd4; }
+  .help { margin-top: 28px; font-size: 14px; color: #777; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>소설 뷰어</h1>
+  <p>PC의 소설 폴더를 와이파이로 불러와 읽습니다.</p>
+  <div class="err" id="err">PC에 연결할 수 없습니다.<br>PC에서 <b>start.bat</b> 창이 열려 있는지, 폰과 PC가 같은 와이파이인지 확인하세요.</div>
+  <label for="addr">PC 주소</label>
+  <input id="addr" inputmode="url" autocomplete="off" placeholder="예: 192.168.0.10:8080">
+  <button id="go">연결</button>
+  <button id="skip" class="sub">PC 없이 폰 파일만 보기</button>
+  <div class="help">PC 주소는 PC에서 <b>start.bat</b> 을 켜면 창의 "같은 와이파이:" 줄에 나옵니다.<br>
+    나중에 메뉴의 <b>가 → PC 주소</b> 에서 바꿀 수 있습니다.</div>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const addr = document.getElementById('addr');
+  addr.value = q.get('server') || '';
+  if (q.get('failed')) document.getElementById('err').style.display = 'block';
+  const go = () => { if (addr.value.trim()) Android.connect(addr.value); };
+  document.getElementById('go').onclick = go;
+  document.getElementById('skip').onclick = () => Android.skipSetup();
+  addr.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+</script>
+</body>
+</html>

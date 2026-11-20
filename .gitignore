@@ -1,0 +1,13 @@
+# 빌드 결과물 (GitHub 릴리스로 올림)
+build/
+dist/
+*.apk
+*.exe
+
+# 앱 서명 키: 절대 올리지 않는다(잃어버리면 폰 앱을 덮어서 업데이트할 수 없으니 따로 백업)
+*.keystore
+
+# 개인 자료
+novels/
+folders.txt
+.claude/
