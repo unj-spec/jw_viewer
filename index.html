@@ -8,7 +8,7 @@
 <style>
   :root {
     --bg: #fbfaf7; --fg: #222; --muted: #888; --panel: #f0ede6; --line: #ddd8cc; --accent: #3b6fd4;
-    --font-size: 18px; --line-height: 1.9; --width: 720px;
+    --font-size: 18px; --line-height: 1.9; --side: 20px;
     --sat: 0px;   /* 앱에서 상태바 높이 */
     --sab: 0px;   /* 앱에서 아래 내비게이션 막대 높이 */
     --hh: 56px;   /* 메뉴(헤더) 높이 */
@@ -93,7 +93,8 @@
 
   #reader { position: relative; flex: 1; overflow: auto; }
   html.page-mode #reader { overflow: hidden; touch-action: none; }
-  #text { max-width: var(--width); margin: 0 auto; padding: 24px 20px 50vh;
+  /* 글 폭 = 화면 폭 - 양옆 여백. 폰에서도 여백만큼 바로 달라진다(예전 '본문 폭'은 폰 화면보다 넓어 효과가 없었음). */
+  #text { margin: 0; padding: 24px var(--side) 50vh;
     font-size: var(--font-size); line-height: var(--line-height); white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
   #text p { margin: 0; }
   #text p:empty::before { content: '\200b'; }  /* 빈 줄도 한 줄 높이를 갖게 해서 페이지가 줄 단위로 맞는다 */
@@ -127,7 +128,6 @@
   @media (max-width: 700px) {
     nav { position: absolute; top: 0; bottom: 0; left: 0; z-index: 20; width: 86%; box-shadow: 0 0 20px rgba(0,0,0,.3); }
     nav:not(.hidden) + #backdrop { display: block; position: absolute; inset: 0; z-index: 19; background: rgba(0,0,0,.35); }
-    #text { padding-left: 16px; padding-right: 16px; }
   }
 
   /* 휴대폰(앱·터치 화면): 읽는 동안 메뉴를 숨기고, 화면 가운데를 누르면 보인다. */
@@ -193,9 +193,11 @@
         <option value="1.5">1.5</option><option value="1.7">1.7</option><option value="1.9">1.9</option>
         <option value="2.2">2.2</option><option value="2.5">2.5</option>
       </select></div>
-    <div class="row"><span>본문 폭</span>
-      <select id="selWidth">
-        <option value="560px">좁게</option><option value="720px">보통</option><option value="960px">넓게</option><option value="100%">꽉 차게</option>
+    <div class="row"><span>양옆 여백</span>
+      <select id="selSide">
+        <option value="4">4px</option><option value="8">8px</option><option value="12">12px</option><option value="16">16px</option>
+        <option value="20">20px</option><option value="28">28px</option><option value="36">36px</option><option value="48">48px</option>
+        <option value="64">64px</option><option value="96">96px</option><option value="160">160px</option><option value="240">240px</option>
       </select></div>
     <div class="row app-only"><span>PC 주소</span><button id="btnServer">바꾸기</button></div>
     <div class="row app-only"><span id="verText">앱 버전</span><button id="btnUpdate">업데이트 확인</button></div>
@@ -254,7 +256,7 @@ const THEMES = [
   ['gray', '회색'], ['dusk', '저녁'], ['dark', '어둡게'], ['navy', '남색'], ['black', '검정'],
 ];
 
-const settings = Object.assign({ fontSize: 18, lineHeight: '1.9', width: '720px', theme: 'light', auto: true, mode: 'page', nav: true },
+const settings = Object.assign({ fontSize: 18, lineHeight: '1.9', side: 20, theme: 'light', auto: true, mode: 'page', nav: true },
   store.get('settings', {}));
 // 지금 연 소설. 'pc:<PC 경로>' 또는 'phone:<폰 파일 주소>'
 let current = store.get('current', null);
@@ -448,12 +450,12 @@ $('seekRange').addEventListener('input', () => {
 function applySettings() {
   root.style.setProperty('--font-size', settings.fontSize + 'px');
   root.style.setProperty('--line-height', settings.lineHeight);
-  root.style.setProperty('--width', settings.width);
+  root.style.setProperty('--side', settings.side + 'px');
   root.dataset.theme = settings.theme;
   root.classList.toggle('page-mode', settings.mode === 'page');
   $('selMode').value = settings.mode;
   $('selLine').value = settings.lineHeight;
-  $('selWidth').value = settings.width;
+  $('selSide').value = settings.side;
   for (const b of $('themes').children) b.classList.toggle('sel', b.dataset.theme === settings.theme);
   $('btnAuto').classList.toggle('on', settings.auto);
   $('btnAuto').textContent = settings.auto ? '켜짐' : '꺼짐';
@@ -816,7 +818,7 @@ $('btnSmaller').onclick = () => changeSetting(() => { settings.fontSize = Math.m
 $('btnBigger').onclick = () => changeSetting(() => { settings.fontSize = Math.min(40, settings.fontSize + 1); });
 $('selMode').onchange = (e) => changeSetting(() => { settings.mode = e.target.value; });
 $('selLine').onchange = (e) => changeSetting(() => { settings.lineHeight = e.target.value; });
-$('selWidth').onchange = (e) => changeSetting(() => { settings.width = e.target.value; });
+$('selSide').onchange = (e) => changeSetting(() => { settings.side = Number(e.target.value); });
 if (app) {
   const showVol = () => {
     const on = app.getVolumeKeys();
